@@ -1,11 +1,14 @@
 from os import walk
 from enum import Enum
 from PIL import Image, ImageTk
-from tkinter import Canvas, Tk
+from tkinter import Tk, Button
+from tkinter.ttk import Label
 
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 800
-
+MENU_X_PADDING = SCREEN_WIDTH // 2 - 50
+MENU_Y_PADDING = 10
+FONT = ("MS Sans Serif", 16, "normal")
 
 class PlayerType(Enum):
     ONE = 1
@@ -18,6 +21,13 @@ class GameState(Enum):
     DRAW = 3
 
 
+class GameModes(Enum):
+    SINGLE_PLAYER = 1
+    MULTIPLAYER = 2
+    MAIN_MENU = 3
+    EXIT = 4
+
+
 class Player(object):
     """Player objects represents a player data in the game"""
 
@@ -25,15 +35,20 @@ class Player(object):
     def __init__(self, name: str, player_type: PlayerType) -> None:
         """Initialize the player data"""
         self.name = name
-        self.position = -1
         self.player_type = player_type
         self.mark = "X" if player_type == PlayerType.ONE else "O"
+        self.reset()
 
 
     def process_input(self) -> None:
         """Process the player input"""
         if 1 > self.position > 9:
-            self.position = -1
+            self.reset()
+    
+
+    def reset(self) -> None:
+        """Resets the current player"""
+        self.position = -1
 
 
 class Board(object):
@@ -42,16 +57,23 @@ class Board(object):
 
     def __init__(self) -> None:
         """Creates the board slots"""
-        self.board = 9 * [" "]
+        self.reset()
 
 
-    def update(self, player: Player) -> bool:
+    def update(self, player: Player, image: ImageTk, buttons: list[Button]) -> bool:
         """Update the board based on player input"""
-        if -1 < player.position < 10 and self.board[player.position] == " ":
+        if -1 < player.position < 9 and self.board[player.position] == " ":
             self.board[player.position] = player.mark
+            buttons[player.position].config({"image": image})
+
             return True
 
         return False
+
+
+    def reset(self) -> None:
+        """Resets the current board"""
+        self.board = 9 * [" "]
 
 
     def debug_render(self) -> None:
@@ -147,16 +169,15 @@ class AssetsLoader(object):
     """Preloads the game assets"""
 
 
-    def __init__(self, source_path: str, image_size: tuple[int]) -> None:
-        """Initialize the game assets"""
-        #TODO: Refactor, make this class more generic in order to support multiple assets
+    def __init__(self, source_path: str, image_size: tuple[int], sprite_config: dict) -> None:
+        """Initialize the game assets, accepts dict config with filename and array of images"""
         self.image_refs = {}
         for _, _, files in walk(source_path):
-            image_ref = Image.open(f"{source_path}/{files[0]}")
-            background = image_ref.resize(image_size, Image.Resampling.LANCZOS)
-            self.image_refs["background"] = ImageTk.PhotoImage(background.crop((0, 0, 600, 800)))
-            self.image_refs["X"] = ImageTk.PhotoImage(background.crop((615, 50, 750, 250)))
-            self.image_refs["O"] = ImageTk.PhotoImage(background.crop((615, 300, 750, 480)))
+            for file in files:
+                image_ref = Image.open(f"{source_path}/{file}")
+                img = image_ref.resize(image_size, Image.Resampling.LANCZOS)
+                for sprite in sprite_config[file]:
+                    self.image_refs[sprite.get("name")] = ImageTk.PhotoImage(img.crop(sprite.get("coords")))
 
 
 class TicTacToe(object):
@@ -166,80 +187,62 @@ class TicTacToe(object):
     def __init__(self) -> None:
         """Initialize the game state, board and players"""
         self.board = Board()
-        self.player_one = Player("Player One", PlayerType.ONE)
-        self.player_two = AIAgent(self.board, "Player Two", PlayerType.TWO)
-        self.current_turn = GameState.TURN_P1
+        self.game_mode = GameModes.MAIN_MENU
 
         self.window = Tk()
         self.window.title("Tic Tac Toe")
-        self.assets_loader = AssetsLoader("./assets", (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.window.geometry(f"{SCREEN_WIDTH}x{SCREEN_HEIGHT}")
 
-        self.canvas = Canvas(self.window, width=SCREEN_WIDTH, height=SCREEN_HEIGHT)
-        self.canvas.pack(fill="both", expand=True)
-        self.canvas.create_image(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, image=self.assets_loader.image_refs.get("background"))
-        self.canvas.bind("<Button 1>", lambda ev: self.handle_click_input(ev.x, ev.y))
+        assets_config = {
+            "ttt_sprite.png": [
+                {"name": "X", "coords": (615, 50, 750, 250)},
+                {"name": "O", "coords": (615, 300, 750, 500)},
+                {"name": "blk", "coords": (0, 0, 135, 200)}
+            ]
+        }
+        
+        self.assets_loader = AssetsLoader(source_path="./assets",
+                                          image_size=(SCREEN_WIDTH, SCREEN_HEIGHT),
+                                          sprite_config=assets_config)
 
-        self.run_game()
+        self.render_based_on_mode()
+
+        self.window.mainloop()
 
 
-    def handle_click_input(self, x: int, y: int) -> None:
+    def handle_click_input(self, position: int) -> None:
         """Handles the user input from the mouse button clicks"""
-        # TODO: Refactor hardcoded values
-        row = col = -1
-        if 150 < x < 285:
-            col = 0
-        elif 310 < x < 450:
-            col = 1
-        elif 475 < x < 615:
-            col = 2
-
-        if 65 < y < 255:
-            row = 0
-        elif 290 < y < 500:
-            row = 1
-        elif 530 < y < 730:
-            row = 2
-
-        if -1 < row < 3 and -1 < col < 3:
+        if -1 < position < 9:
             player = self.player_one if self.current_turn == GameState.TURN_P1 else self.player_two
-            player.position = row * 3 + col
-    
-
-    def render_mark(self, position: int) -> None:
-        """Render the new mark on the position picked by the player"""
-        x = position // 3
-        y = position % 3
-        img_mark = self.assets_loader.image_refs["X"] if self.current_turn == GameState.TURN_P1 else self.assets_loader.image_refs["O"]
-
-        # TODO: Refactor hardcoded values
-        if x == 0 and y == 0:
-            self.canvas.create_image(200, 150, image=img_mark)
-        elif x== 0 and y == 1:
-            self.canvas.create_image(380, 150, image=img_mark)
-        elif x == 0 and y == 2:
-            self.canvas.create_image(560, 150, image=img_mark)
-        elif x == 1 and y == 0:
-            self.canvas.create_image(200, 390, image=img_mark)
-        elif x == 1 and y == 1:
-            self.canvas.create_image(380, 390, image=img_mark)
-        elif x == 1 and y == 2:
-            self.canvas.create_image(560, 390, image=img_mark)
-        elif x == 2 and y == 0:
-            self.canvas.create_image(200, 630, image=img_mark)
-        elif x == 2 and y == 1:
-            self.canvas.create_image(380, 630, image=img_mark)
-        elif x == 2 and y == 2:
-            self.canvas.create_image(560, 630, image=img_mark)
+            player.position = position
 
 
     def run_game(self) -> None:
         """Runs and handles the game states"""
+        self.current_turn = GameState.TURN_P1
+        self.player_one.reset()
+        self.player_two.reset()
+        self.board.reset()
+        self.buttons = 9 * [0]
+        for index in range(9):
+            button = Button(image=self.assets_loader.image_refs.get("blk"), 
+                            command=lambda pos=index: self.handle_click_input(pos))
+            button.grid(row=index // 3, column=index % 3)
+            self.buttons[index] = button
+        
+        current_player = self.player_one if self.current_turn == GameState.TURN_P1 else self.player_two
+        self.bottom_label = Label(master=self.window,
+                            text=f"Turn: {current_player.name}",
+                            justify="left", font=FONT)
+        self.bottom_label.grid(row=3, column=0)
+
         result = self.board.check_state()
         while not result:
             current_player = self.player_one if self.current_turn == GameState.TURN_P1 else self.player_two
+            self.bottom_label.config({"text": f"Turn: {current_player.name}"})
             current_player.process_input()
-            if self.board.update(current_player):
-                self.render_mark(current_player.position)
+            mark = self.assets_loader.image_refs["X"] if self.current_turn == GameState.TURN_P1 else self.assets_loader.image_refs["O"]
+            if self.board.update(current_player, mark, self.buttons):
                 self.current_turn = GameState.TURN_P1 if self.current_turn == GameState.TURN_P2 else GameState.TURN_P2
                 result = self.board.check_state()
             if result is None and self.board.is_full():
@@ -249,10 +252,59 @@ class TicTacToe(object):
             self.window.update_idletasks()
             self.window.update()
 
+        self.continue_button = Button(master=self.window, text="Continue", 
+                                      command=lambda game_mode=GameModes.MAIN_MENU: self.set_game_mode(game_mode)
+                                     )
+        self.continue_button.grid(row=3, column=2)
         if self.current_turn == GameState.DRAW:
-            print("It's a draw!")
+            self.bottom_label.config({"text": "It's a draw!"})
         elif self.current_turn == GameState.TURN_P1:
-            print("Player Two won!")
+            self.bottom_label.config({"text": f"{self.player_two.name} won!"})
         elif self.current_turn == GameState.TURN_P2:
-            print("Player One won!")
-        self.window.mainloop()
+            self.bottom_label.config({"text": f"{self.player_one.name} won!"})
+
+
+    def set_game_mode(self, game_mode: GameModes) -> None:
+        """Sets the game mode"""
+        # Cleanup
+        if game_mode == GameModes.MAIN_MENU:
+            for button in self.buttons:
+                button.destroy()
+
+            self.bottom_label.destroy()
+            self.continue_button.destroy()
+        else:
+            self.single_player_btn.destroy()
+            self.multiplayer_btn.destroy()
+            self.exit_btn.destroy()
+
+        self.game_mode = game_mode
+        self.render_based_on_mode()
+
+    
+    def render_based_on_mode(self) -> None:
+        """Renders on the screen based on the game mode"""
+        if self.game_mode == GameModes.MAIN_MENU:
+            self.single_player_btn = Button(master=self.window, text="Single Player", 
+                                            command=lambda game_mode=GameModes.SINGLE_PLAYER: self.set_game_mode(game_mode),
+                                            justify="center"
+                                           )
+            self.single_player_btn.grid(row=0, column=0, padx=MENU_X_PADDING, pady=MENU_Y_PADDING)
+            self.multiplayer_btn = Button(master=self.window, text="Multiplayer", 
+                                          command=lambda game_mode=GameModes.MULTIPLAYER: self.set_game_mode(game_mode),
+                                          justify="center"
+                                         )
+            self.multiplayer_btn.grid(row=1, column=0, padx=MENU_X_PADDING, pady=MENU_Y_PADDING)
+            self.exit_btn = Button(master=self.window, text="Exit", 
+                                   command=lambda: self.window.quit(),
+                                   justify="center"
+                                  )
+            self.exit_btn.grid(row=2, column=0, padx=MENU_X_PADDING, pady=MENU_Y_PADDING)
+        elif self.game_mode == GameModes.SINGLE_PLAYER:
+            self.player_one = Player("Player One", PlayerType.ONE)
+            self.player_two = AIAgent(self.board, "Player Two", PlayerType.TWO)
+            self.run_game()
+        elif self.game_mode == GameModes.MULTIPLAYER:
+            self.player_one = Player("Player One", PlayerType.ONE)
+            self.player_two = Player("Player Two", PlayerType.TWO)
+            self.run_game()
