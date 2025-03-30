@@ -1,5 +1,5 @@
-from PIL import ImageTk
 from tkinter import Button
+from PIL import ImageTk
 
 
 class Board(object):
@@ -34,16 +34,16 @@ class Board(object):
             if i < 6:
                 print(11 * "-")
 
-    
+
     def get_available_positions(self) -> list[int]:
         """Returns a list of available positions on the board"""
         return [i for i, mark in enumerate(self.board) if mark == " "]
-    
+
 
     def is_full(self) -> bool:
         """Returns if the board is full otherwise false"""
         return " " not in self.board
-    
+
 
     def check_state(self) -> str | None:
         """Checks the internal state of the board for a change"""

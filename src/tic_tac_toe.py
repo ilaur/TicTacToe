@@ -1,11 +1,12 @@
 from os import walk
 from enum import Enum
-from PIL import Image, ImageTk
 from tkinter import Tk, Button as TkButton
 from tkinter.ttk import Label, Button as TtkButton
+from PIL import Image, ImageTk
 
 from board import Board
 from player import Player, AIAgent, PlayerType
+
 
 SCREEN_WIDTH = 430
 SCREEN_HEIGHT = 650
@@ -15,12 +16,14 @@ FONT = ("MS Sans Serif", 16, "normal")
 
 
 class GameState(Enum):
+    """Enumeration of the game states"""
     TURN_P1 = 1
     TURN_P2 = 2
     DRAW = 3
 
 
 class GameModes(Enum):
+    """Enumeration of the game modes"""
     SINGLE_PLAYER = 1
     MULTIPLAYER = 2
     MAIN_MENU = 3
@@ -38,7 +41,8 @@ class AssetsLoader(object):
                 image_ref = Image.open(f"{source_path}/{file}")
                 img = image_ref.resize(image_size, Image.Resampling.LANCZOS)
                 for sprite in sprite_config[file]:
-                    self.image_refs[sprite.get("name")] = ImageTk.PhotoImage(img.crop(sprite.get("coords")))
+                    img_name = sprite.get("name")
+                    self.image_refs[img_name] = ImageTk.PhotoImage(img.crop(sprite.get("coords")))
 
 
 class TicTacToe(object):
@@ -61,7 +65,7 @@ class TicTacToe(object):
                 {"name": "blk", "coords": (205, 450, 335, 650)}
             ]
         }
-        
+
         self.assets_loader = AssetsLoader(source_path="../assets",
                                           image_size=(SCREEN_WIDTH, SCREEN_HEIGHT),
                                           sprite_config=assets_config)
@@ -84,13 +88,13 @@ class TicTacToe(object):
         self.player_one.reset()
         self.player_two.reset()
         self.board.reset()
-        self.buttons = 9 * [0]
+        self.buttons = 9 * [None]
         for index in range(9):
             button = TkButton(image=self.assets_loader.image_refs.get("blk"), 
                               command=lambda pos=index: self.handle_click_input(pos))
             button.grid(row=index // 3, column=index % 3)
             self.buttons[index] = button
-        
+
         current_player = self.player_one if self.current_turn == GameState.TURN_P1 else self.player_two
         self.bottom_label = Label(master=self.window,
                             text=f"Turn: {current_player.name}",
@@ -141,7 +145,7 @@ class TicTacToe(object):
         self.game_mode = game_mode
         self.render_based_on_mode()
 
-    
+
     def render_based_on_mode(self) -> None:
         """Renders on the screen based on the game mode"""
         if self.game_mode == GameModes.MAIN_MENU:

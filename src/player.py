@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class PlayerType(Enum):
+    """Enumeration for a player type"""
     ONE = 1
     TWO = 2
 
@@ -22,7 +23,7 @@ class Player(object):
         """Process the player input"""
         if 1 > self.position > 9:
             self.reset()
-    
+
 
     def reset(self) -> None:
         """Resets the current player"""
@@ -39,7 +40,7 @@ class AIAgent(Player):
         self.game_board = board
         self.opponent_mark = "O" if self.mark == "X" else "X"
 
-    
+
     def process_input(self) -> None:
         """Picks the most efficient postion using the minimax algorithm"""
         best_score = float("-inf")
@@ -56,7 +57,7 @@ class AIAgent(Player):
 
 
     def minimax(self, depth: int, is_maximazing: bool) -> int:
-        """Maximize the score of all possibilities for the AI and minimize the score for the player"""
+        """Maximize the score of all possibilities, AI and minimize the score for the player"""
         winner = self.game_board.check_state()
         if winner == self.mark:
             return 1
@@ -64,7 +65,7 @@ class AIAgent(Player):
             return -1
         if self.game_board.is_full():
             return 0
-        
+
         if is_maximazing:
             best_score = float("-inf")
             for pos in self.game_board.get_available_positions():
